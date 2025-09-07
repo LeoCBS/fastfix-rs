@@ -6,7 +6,6 @@ pub struct PresenceMap {
 //more explication about bitwise here https://play.rust-lang.org/?version=stable&mode=debug&edition=2024&gist=486362d64c12efab2584ce6550475521
 impl PresenceMap {
     pub fn new(data: &[u8]) -> Option<(Self, Vec<u8>)> {
-        //println!("{:?}", data);
         let mut bits = Vec::new();
         let mut consumed = 0;
 
@@ -17,9 +16,7 @@ impl PresenceMap {
             println!("seven bits = {seven_bits}");
             println!("more = {msb_end}");
 
-            // Lê os 7 bits (do mais significativo para o menos)
             for i in (0..7).rev() {
-                //println!("{}", seven_bits >> i);
                 // seven_bits >> i "move" right bite index i
                 // & 1 get bit less significative
                 bits.push(((seven_bits >> i) & 1) == 1);
@@ -57,11 +54,37 @@ fn template_id(data: &[u8]) -> Option<(u8, Vec<u8>)> {
         consumed += 1;
         let msb_end = (byte & 0x80) == 128; // MSB = continue?
         let seven_bits = byte & 0x7F;
-        //println!("seven bits = {seven_bits}");
-        //println!("more = {msb_end}");
 
         value = (value << 7) | seven_bits;
 
+        if msb_end {
+            break; // last byte
+        }
+    }
+    let remaining_bytes = &data[consumed..];
+    Some((value, Vec::from(remaining_bytes)))
+}
+
+fn get_app_ver_id_constant() -> String {
+    "1128=9".to_string()
+}
+
+fn get_msg_type_const() -> String {
+    "35=X".to_string()
+}
+
+fn decode_u32(data: &[u8]) -> Option<(u32, Vec<u8>)> {
+    println!("data u32 {:?}", data);
+    let mut consumed = 0;
+    let mut value: u32 = 0;
+    for &byte in data {
+        consumed += 1;
+        let msb_end = (byte & 0x80) != 0;
+        let seven_bits = (byte & 0x7F) as u32;
+        println!("seven bits = {seven_bits}");
+
+        value = (value << 7) | seven_bits;
+        println!("value {}", value);
         if msb_end {
             break; // last byte
         }
@@ -80,14 +103,15 @@ pub mod test_fast_decoder {
     #[test]
     fn test_decode() {
         let fixture = setup();
-        //        let input =
-        //pcap::reader::read_first_packet_data("./src/fast/sample_seq_num_unique.pcap").unwrap();
         let (pmap, rem) = PresenceMap::new(&fixture.fastfix_msg_bytes).unwrap();
         assert!(pmap.is_present(0));
         let (template_id, rem) = decoder::template_id(rem.as_bytes()).unwrap();
         let exptected_template_id = 152;
         assert_eq!(template_id, exptected_template_id);
-        println!("{:?}", rem);
+
+        let (msg_seq_num, _) = decoder::decode_u32(rem.as_bytes()).unwrap();
+        let exptected_seq_num = 7503225;
+        assert_eq!(msg_seq_num, exptected_seq_num);
     }
 
     struct Fixture {
